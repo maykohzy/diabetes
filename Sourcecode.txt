@@ -1,0 +1,129 @@
+# Load packages ---------------------------------------------------------------
+
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(DT)
+library(shinythemes)
+
+# Load data --------------------------------------------------------------------
+
+diabetes2 <- read.csv(file = "https://raw.githubusercontent.com/maykohzy/diabetes/main/diabetes.csv", header = TRUE, sep = ",")
+
+# Define UI --------------------------------------------------------------------
+
+ui <- fluidPage(
+  shinythemes::themeSelector(),  # Set a default theme
+  sidebarLayout(
+    sidebarPanel(
+      selectInput(
+        inputId = "y",
+        label = "Y-axis:",
+        choices = c(
+          "Glucose" = "Glucose",
+          "BloodPressure" = "BloodPressure",
+          "Insulin" = "Insulin",
+          "BMI" = "BMI",
+          "Age" = "Age"
+        ),
+        selected = "BloodPressure"
+      ),
+      selectInput(
+        inputId = "x",
+        label = "X-axis:",
+        choices = c(
+          "Glucose" = "Glucose",
+          "BloodPressure" = "BloodPressure",
+          "Insulin" = "Insulin",
+          "BMI" = "BMI",
+          "Age" = "Age"
+        ),
+        selected = "Glucose"
+      ),
+      selectInput(
+        inputId = "z",
+        label = "Color by:",
+        choices = c(
+          "Pregnanices_Category
+" = "Pregnanices_Category
+",  # Updated variable name
+          "Outcome_Category	" = "Outcome_Category	"  # Updated variable name
+        ),
+        selected = "Outcome_Category"
+      ),
+      sliderInput(
+        inputId = "alpha",
+        label = "Alpha:",
+        min = 0, max = 1,
+        value = 0.5
+      ),
+      checkboxInput(inputId = "show_data",
+                    label = "Show data table", 
+                    value = TRUE),
+      selectInput(
+        inputId = "filetype",
+        label = "File Type:",
+        choices = c("csv", "tsv"),
+        selected = "csv"
+      ),
+      selectizeInput(
+        inputId = "selected_vars",
+        label = "Select Variables:",
+        choices = colnames(diabetes2),
+        multiple = TRUE,
+        selected = "Glucose"
+      ),
+      downloadButton("download_data", "Download data")
+    ),
+    mainPanel(
+      plotOutput(outputId = "scatterplot", brush = "plot_brush"),
+      textOutput(outputId = "correlation"),
+      DTOutput("diabetes2table")  # Renamed the output here
+    )
+  )
+)
+
+# Define server ---------------------------------------------------------------
+
+server <- function(input, output, session) {
+  output$scatterplot <- renderPlot({
+    ggplot(data = diabetes2, aes_string(
+      x = input$x, y = input$y,
+      color = input$z
+    )) +
+      geom_point(alpha = input$alpha)  # Placing geom_point() inside ggplot
+  })
+  
+  output$diabetes2table <- renderDataTable({
+    brushedPoints(diabetes2, brush = input$plot_brush) %>%
+      select(Pregnancies, Glucose, BloodPressure, SkinThickness, Insulin, BMI, Age, Outcome)
+  })
+  
+  # Create text output stating the correlation between the two plotted
+  output$correlation <- renderText({
+    r <- round(cor(diabetes2[, input$x], diabetes2[, input$y], use = "pairwise"), 3)
+    paste0(
+      "Correlation = ", r,
+      ". Note: If the relationship between the two variables is not linear, the correlation coefficient will not be meaningful."
+    )
+  })
+  
+  # Download file
+  output$download_data <- downloadHandler(
+    filename = function() {
+      paste0("diabetes_data.", input$filetype)
+    },
+    content = function(file) { 
+      if (input$filetype == "csv"){ 
+        write.csv(diabetes2 %>% select(input$selected_vars), file, row.names = FALSE) 
+      }
+      if (input$filetype == "tsv"){ 
+        write.table(diabetes2 %>% select(input$selected_vars), file, sep = "\t", row.names = FALSE) 
+      }
+    }
+  )
+}
+
+# Create a Shiny app object --------------------------------------------------
+
+shinyApp(ui = ui, server = server)
